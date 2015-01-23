@@ -67,9 +67,9 @@ def getPidJava(cmd, str_pattern):
 
     return favor_pid, favor_cmd
 
-def writeLog():
-    f = open('fat.log', 'w')
-    f.write(str(datetime.now()))
+def writeLog(str_log):
+    f = open('fat.log', 'a')
+    f.write(str(str_log) + "\n")
     f.close()
 
 # --- start ---
@@ -81,12 +81,12 @@ str_pattern = "-Didea.platform.prefix="
 java_pid, java_cmd = getPidJava(cmd, str_pattern)
 
 # Print result
-
-
+str_log = str(datetime.now())
+writeLog(str_log)
 for item in range(0, len(java_pid)):
     for j in range(0, len(pid)):
         if pid[j] == java_pid[item]:
-            print "PID:", java_pid[item], "RAM:", int(rss[j])/1024, "MB", "JAVA:", java_cmd[item]
+            str_log = "PID:", java_pid[item], "RAM:", int(rss[j])/1024, "MB", "JAVA:", java_cmd[item]
+            writeLog(str_log)
 
-writeLog()
 
