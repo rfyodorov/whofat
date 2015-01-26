@@ -1,7 +1,27 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
+import time
+
+def getUsedMemAsPercent():
+    free_list = os.popen("free -m").read()
+    free_list = free_list.split(" ")
+
+    # Remove enpty items
+    for i in range(len(free_list), 0, -1):
+        if free_list[i-1] == '':
+            free_list.pop(i-1)
+
+    mem_total = int(free_list[6])
+    mem_free = free_list[14]
+    str_pos = mem_free.rfind("\n")
+    mem_free = int(mem_free[:str_pos])
+
+    mem_free_percent = mem_free * 100 / mem_total
+    mem_used_percent = 100 - mem_free_percent
+
+    return mem_used_percent
 
 def getPidMemUser():
     proc_list = os.popen("ps -eo pid,rss,vsz,user").read()
@@ -31,14 +51,10 @@ def getPidMemUser():
     list_row_rss.pop(0)
     list_row_pid.pop(0)
 
-    #for i in range(0, len(list_row_rss)):
-    #    print "Pid:" , list_row_pid[i], "RAM:" , int(list_row_rss[i])/1024, "Mb"
-
     return list_row_pid, list_row_rss, list_row_vsz, list_row_user, proc_cmd_list
 
 def getPidCmd(proc_cmd_list):
     cmd_list = proc_cmd_list
-    #cmd_list = os.popen("ps -eo cmd").read()
 
     list_cmd = []
     for line in  cmd_list.split('\n'):
@@ -53,12 +69,11 @@ def getPidJava(cmd, str_pattern):
     favor_cmd = []
 
     for item in range(0, len(cmd)):
-        if "java" in cmd[item]:
+        if str_pattern in cmd[item]:
             favor_pid.append(pid[item])
 
             str = cmd[item]
             str = str.split(" ")
-            #print str
 
             for j in str:
                 if str_pattern in j:
@@ -68,25 +83,52 @@ def getPidJava(cmd, str_pattern):
     return favor_pid, favor_cmd
 
 def writeLog(str_log):
-    f = open('fat.log', 'a')
+    f = open(LOG_FILENAME, 'a')
     f.write(str(str_log) + "\n")
+    f.write("\n")
     f.close()
 
-# --- start ---
+# --- start point ---
 
-pid, rss, vsz, user, proc_cmd_list = getPidMemUser()
-cmd = getPidCmd(proc_cmd_list)
+print "Start script. Please press Ctrl+C to exit"
 
-str_pattern = "-Didea.platform.prefix="
-java_pid, java_cmd = getPidJava(cmd, str_pattern)
+STR_PATTERN = "-Didea.platform.prefix="
+WARN_PERCENT = 0
+LOG_FILENAME = "fat.log"
 
-# Print result
-str_log = str(datetime.now())
-writeLog(str_log)
-for item in range(0, len(java_pid)):
-    for j in range(0, len(pid)):
-        if pid[j] == java_pid[item]:
-            str_log = "PID:", java_pid[item], "RAM:", int(rss[j])/1024, "MB", "JAVA:", java_cmd[item]
-            writeLog(str_log)
+# Delay if the process uses a lot of memory for a long time
+time_stamp = datetime.now() - timedelta(minutes=1)
+#print "1st:", time_stamp
 
+while True:
+    try:
+        mem_used_per = getUsedMemAsPercent()
+        time.sleep(10)
 
+        if mem_used_per >= WARN_PERCENT: # >= 70
+
+            time_stamp_current = datetime.now()
+            time_stamp_delta = timedelta(minutes=1)
+
+            # If delay between current time and previously check is over, write log
+            if time_stamp_current > (time_stamp + time_stamp_delta):
+                time_stamp = time_stamp_current
+
+                pid, rss, vsz, user, proc_cmd_list = getPidMemUser()
+                cmd = getPidCmd(proc_cmd_list)
+
+                java_pid, java_cmd = getPidJava(cmd, STR_PATTERN)
+
+                # Print result
+                str_log = str(datetime.now()) + " - Used memory=" + str(mem_used_per) + "%"
+                writeLog("\n")
+                writeLog((str_log)
+                for item in range(0, len(java_pid)):
+                    for j in range(0, len(pid)):
+                        if pid[j] == java_pid[item]:
+                            str_log = "PID:", java_pid[item], "RAM:", int(rss[j])/1024, "MB", "JAVA:", java_cmd[item]
+                            writeLog(str_log)
+
+    except KeyboardInterrupt:
+        print "^C received, shutting down script"
+        break
